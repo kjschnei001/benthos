@@ -326,15 +326,18 @@ func getMetricValues(i interface{}) map[string]interface{} {
 
 func (i *InfluxDB) getAllMetrics() map[string]map[string]interface{} {
 	i.regMutex.Lock()
-	currentRegistry := i.registry
+	currentMetrics := make(map[string]interface{})
+	i.registry.Each(func(name string, metric interface{}) {
+		currentMetrics[name] = metric
+	})
 	i.registry = metrics.NewRegistry()
 	i.regMutex.Unlock()
 
 	data := make(map[string]map[string]interface{})
-	currentRegistry.Each(func(name string, metric interface{}) {
+	for name, metric := range currentMetrics {
 		values := getMetricValues(metric)
 		data[name] = values
-	})
+	}
 	i.runtimeRegistry.Each(func(name string, metric interface{}) {
 		pathMappedName := i.pathMapping.mapPathNoTags(name)
 		values := getMetricValues(metric)
