@@ -353,13 +353,13 @@ func (i *InfluxDB) GetCounter(path string) StatCounter {
 		return DudStat{}
 	}
 	encodedName := encodeInfluxDBName(name, labels, values)
-	return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
-		return influxDBCounter{
-			name:    encodedName,
-			influx:  i,
-			Counter: metrics.NewCounter(),
-		}
-	}).(influxDBCounter)
+	return influxDBCounter{
+		getOrRegisterFunc: func() metrics.Counter {
+			i.regMutex.RLock()
+			defer i.regMutex.RUnlock()
+			return metrics.GetOrRegisterCounter(encodedName, i.registry)
+		},
+	}
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
@@ -377,13 +377,13 @@ func (i *InfluxDB) GetCounterVec(path string, n []string) StatCounterVec {
 			v = append(v, values...)
 			v = append(v, l...)
 			encodedName := encodeInfluxDBName(path, labels, v)
-			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
-				return influxDBCounter{
-					name:    encodedName,
-					influx:  i,
-					Counter: metrics.NewCounter(),
-				}
-			}).(influxDBCounter)
+			return influxDBCounter{
+				getOrRegisterFunc: func() metrics.Counter {
+					i.regMutex.RLock()
+					defer i.regMutex.RUnlock()
+					return metrics.GetOrRegisterCounter(encodedName, i.registry)
+				},
+			}
 		},
 	}
 }
