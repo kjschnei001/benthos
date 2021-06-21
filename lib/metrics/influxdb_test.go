@@ -61,7 +61,8 @@ func TestInfluxCounters(t *testing.T) {
 	i := influx.(*InfluxDB)
 
 	expectedMetrics := 3
-	i.GetCounter("").Incr(1)
+	c := i.GetCounter("")
+	c.Incr(1)
 	i.GetCounter("cou nter").Incr(1)
 	i.GetCounter("cou nter").Incr(1)
 	i.GetCounterVec("", []string{"label"}).With("value").Incr(2)
@@ -78,6 +79,37 @@ func TestInfluxCounters(t *testing.T) {
 		`cou\ nter,buz=first`,
 		`counter\ with\ labels,buz=first,label=value`,
 		`counter\ with\ labels,buz=first,label=value2`,
+	}
+
+	for _, measurementName := range measurements {
+		if values, ok := m[measurementName]; !ok {
+			keys := make([]string, 0, len(m))
+			for k := range m {
+				keys = append(keys, k)
+			}
+			t.Errorf("expected to find %s in %v", measurementName, keys)
+		} else if len(values) != 1 {
+			t.Errorf("number of values was not expected %d", len(values))
+		}
+	}
+
+	// test interval refresh
+	m = i.getAllMetrics()
+	if len(m) != 0 {
+		t.Errorf("expected %d metrics, received %d", expectedMetrics, len(m))
+	}
+
+	c.Incr(1)
+	i.GetCounter("cou nter").Incr(1)
+	i.GetCounter("cou nter").Incr(1)
+	i.GetCounterVec("", []string{"label"}).With("value").Incr(2)
+	i.GetCounterVec("counter with labels", []string{"label"}).With("value").Incr(2)
+	i.GetCounterVec("counter with labels", []string{"label"}).With("value").Incr(2)
+	i.GetCounterVec("counter with labels", []string{"label"}).With("value2").Incr(2)
+
+	m = i.getAllMetrics()
+	if len(m) != expectedMetrics {
+		t.Errorf("expected %d metrics, received %d", expectedMetrics, len(m))
 	}
 
 	for _, measurementName := range measurements {

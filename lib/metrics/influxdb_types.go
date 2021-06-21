@@ -35,11 +35,29 @@ func (g influxDBGauge) Decr(count int64) error {
 }
 
 type influxDBCounter struct {
+	name   string
+	influx *InfluxDB
 	metrics.Counter
+}
+
+func (i influxDBCounter) reregister() {
+	i.influx.regMutex.RLock()
+	defer i.influx.regMutex.RUnlock()
+
+	if i.influx.registry.Get(i.name) == nil {
+		i.Counter = i.influx.registry.GetOrRegister(i.name, func() metrics.Counter {
+			return influxDBCounter{
+				name:    i.name,
+				influx:  i.influx,
+				Counter: metrics.NewCounter(),
+			}
+		}).(influxDBCounter)
+	}
 }
 
 // Incr increments a metric by an amount.
 func (i influxDBCounter) Incr(count int64) error {
+	i.reregister()
 	i.Inc(count)
 	return nil
 }

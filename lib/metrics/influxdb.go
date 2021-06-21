@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -104,6 +105,7 @@ type InfluxDB struct {
 
 	pathMapping     *pathMapping
 	registry        metrics.Registry
+	regMutex        sync.RWMutex
 	runtimeRegistry metrics.Registry
 	config          InfluxDBConfig
 	log             log.Modular
@@ -323,8 +325,13 @@ func getMetricValues(i interface{}) map[string]interface{} {
 }
 
 func (i *InfluxDB) getAllMetrics() map[string]map[string]interface{} {
+	i.regMutex.Lock()
+	currentRegistry := i.registry
+	i.registry = metrics.NewRegistry()
+	i.regMutex.Unlock()
+
 	data := make(map[string]map[string]interface{})
-	i.registry.Each(func(name string, metric interface{}) {
+	currentRegistry.Each(func(name string, metric interface{}) {
 		values := getMetricValues(metric)
 		data[name] = values
 	})
@@ -345,7 +352,9 @@ func (i *InfluxDB) GetCounter(path string) StatCounter {
 	encodedName := encodeInfluxDBName(name, labels, values)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 		return influxDBCounter{
-			metrics.NewCounter(),
+			name:    encodedName,
+			influx:  i,
+			Counter: metrics.NewCounter(),
 		}
 	}).(influxDBCounter)
 }
@@ -367,7 +376,9 @@ func (i *InfluxDB) GetCounterVec(path string, n []string) StatCounterVec {
 			encodedName := encodeInfluxDBName(path, labels, v)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 				return influxDBCounter{
-					metrics.NewCounter(),
+					name:    encodedName,
+					influx:  i,
+					Counter: metrics.NewCounter(),
 				}
 			}).(influxDBCounter)
 		},
